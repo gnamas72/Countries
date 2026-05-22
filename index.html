@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Globo 3D HD Interattivo</title>
+    <title>Globo 3D HD - Tutti i Territori e Isole</title>
     <style>
         /* Reset totale per smartphone e PC */
         html, body {
@@ -45,8 +45,8 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            pointer-events: none; /* Impedisce al box di bloccare i tocchi sulla mappa */
-            backdrop-filter: blur(5px); /* Effetto vetro sfocato */
+            pointer-events: none;
+            backdrop-filter: blur(5px);
             z-index: 999;
         }
         .stat-item {
@@ -111,10 +111,9 @@
             cursor: pointer;
             flex: 1;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            transition: background-color 0.2s;
         }
         .btn-been { background-color: #2ecc71; color: white; }
-        .btn-want { background-color: #00d2ff; color: #1a1a2e; } /* Allineato all'azzurro ciano del globo */
+        .btn-want { background-color: #00d2ff; color: #1a1a2e; }
         .btn-reset { background-color: #95a5a6; color: white; }
         .popup-btn:active { transform: scale(0.95); }
     </style>
@@ -149,7 +148,6 @@
 
     <!-- Inclusione librerie D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/topojson-client@3"></script>
 
     <script>
         const canvas = d3.select("#globe").node();
@@ -167,9 +165,9 @@
 
         const path = d3.geoPath(projection, context);
 
-        // Caricamento dati da localStorage
-        let mapData = JSON.parse(localStorage.getItem('myWorldMapData3D')) || {};
-        let worldData, countries, selectedCountryFeature = null;
+        // Chiave localStorage aggiornata per evitare conflitti con i vecchi nomi dei paesi
+        let mapData = JSON.parse(localStorage.getItem('myWorldMapData3D_AllTerritories')) || {};
+        let countries = null, selectedCountryFeature = null;
 
         function resize() {
             width = window.innerWidth;
@@ -205,7 +203,7 @@
         function render() {
             context.clearRect(0, 0, width, height);
 
-            if (!worldData) return;
+            if (!countries) return;
 
             // 1. Oceano con gradiente radiale
             const radius = projection.scale();
@@ -222,12 +220,11 @@
             context.fillStyle = gradient;
             context.fill();
 
-            // 2. Nazioni (Disegnate ad alta definizione)
+            // 2. Nazioni e Territori d'Oltremare
             countries.features.forEach(feature => {
                 context.beginPath();
                 path(feature);
-                // Alcuni dataset usano il campo 'NAME' anziché 'name'
-                const name = feature.properties.NAME || feature.properties.name;
+                const name = feature.properties.NAME || feature.properties.name || feature.properties.NAME_LONG;
                 context.fillStyle = getFillColor(name);
                 context.fill();
                 context.strokeStyle = "#2c3e50";
@@ -245,7 +242,7 @@
             }
         }
 
-        // Interazioni di trascinamento e zoom
+        // Interazioni di trascinamento e zoom elevato per trovare le piccole isole
         const drag = d3.drag()
             .on("drag", (event) => {
                 const rotate = projection.rotate();
@@ -258,7 +255,7 @@
             });
 
         const zoom = d3.zoom()
-            .scaleExtent([0.5, 12]) // Aumentato il limite di zoom massimo per apprezzare i dettagli HD
+            .scaleExtent([0.5, 40]) // Zoom massimo aumentato a 40x per ingrandire i Caraibi e le piccole isole
             .on("zoom", (event) => {
                 const baseScale = Math.min(width, height) * 0.4;
                 projection.scale(baseScale * event.transform.k);
@@ -281,12 +278,11 @@
                 return;
             }
 
-            // Controllo compatibilità su entrambi i potenziali nomi delle proprietà del file GeoJSON
             const clicked = countries.features.find(f => d3.geoContains(f, geoPoint));
 
             if (clicked) {
                 selectedCountryFeature = clicked;
-                modalTitle.innerText = clicked.properties.NAME || clicked.properties.name;
+                modalTitle.innerText = clicked.properties.NAME || clicked.properties.name || clicked.properties.NAME_LONG;
                 modal.style.display = "block";
             } else {
                 selectedCountryFeature = null;
@@ -296,7 +292,7 @@
 
         window.updateStatus = function(status) {
             if (!selectedCountryFeature) return;
-            const name = selectedCountryFeature.properties.NAME || selectedCountryFeature.properties.name;
+            const name = selectedCountryFeature.properties.NAME || selectedCountryFeature.properties.name || selectedCountryFeature.properties.NAME_LONG;
 
             if (status === 'RESET') {
                 delete mapData[name];
@@ -304,7 +300,7 @@
                 mapData[name] = status;
             }
 
-            localStorage.setItem('myWorldMapData3D', JSON.stringify(mapData));
+            localStorage.setItem('myWorldMapData3D_AllTerritories', JSON.stringify(mapData));
             modal.style.display = "none";
             selectedCountryFeature = null;
             
@@ -320,11 +316,10 @@
             }
         });
 
-        // CARICAMENTO DEL DATASET 50M (Alta Definizione dei dettagli costieri e geografici)
-        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json").then(topology => {
-            worldData = topology;
-            countries = topojson.feature(worldData, worldData.objects.countries);
-            
+        // CARICAMENTO NUOVO DATASET GEOJSON AD ALTA DEFINIZIONE CON MAPPA DELLE SOVRANITÀ FRAZIONATE
+        // Questo file include esplicitamente Cayman, Turks e Caicos, Bermuda, Reunion, ecc. come entità separate.
+        d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_map_units.geojson").then(data => {
+            countries = data;
             updateCounters(); 
             window.addEventListener("resize", resize);
             resize();
