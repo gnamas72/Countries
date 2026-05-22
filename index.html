@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Globo 3D Interattivo</title>
+    <title>Globo 3D Interattivo con Oceano</title>
     <style>
-        /* Reset totale per sfruttare al massimo lo schermo dello smartphone */
+        /* Reset totale per smartphone */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #f0f2f5; /* Colore dello spazio/sfondo attorno al globo */
+            background-color: #1a1a2e; /* Sfondo scuro attorno al globo (effetto spazio) */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             display: flex;
             justify-content: center;
@@ -33,7 +33,7 @@
         }
         canvas:active { cursor: grabbing; }
 
-        /* Interfaccia Popup Touch-Friendly (Modale anziché popup agganciato) */
+        /* Interfaccia Popup Touch-Friendly (Modale dal basso) */
         .modal {
             display: none;
             position: fixed;
@@ -43,7 +43,7 @@
             background: white;
             padding: 16px 24px;
             border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             z-index: 1000;
             text-align: center;
             width: 85%;
@@ -98,7 +98,7 @@
         </div>
     </div>
 
-    <!-- Inclusione delle librerie D3.js per la gestione della sfera e della geometria -->
+    <!-- Inclusione delle librerie D3.js -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://unpkg.com/topojson-client@3"></script>
 
@@ -111,11 +111,11 @@
         let width = window.innerWidth;
         let height = window.innerHeight;
         
-        // Configurazione della proiezione Ortografica (rende la mappa una sfera 3D)
+        // Configurazione della proiezione Ortografica (Globo 3D)
         const projection = d3.geoOrthographic()
             .scale(Math.min(width, height) * 0.4)
             .translate([width / 2, height / 2])
-            .clipAngle(90); // Nasconde la faccia posteriore del mondo
+            .clipAngle(90); 
 
         const path = d3.geoPath(projection, context);
 
@@ -123,7 +123,7 @@
         let mapData = JSON.parse(localStorage.getItem('myWorldMapData3D')) || {};
         let worldData, countries, selectedCountryFeature = null;
 
-        // Imposta le dimensioni del canvas ad alta risoluzione (Retina/DPR per smartphone)
+        // Gestione alta risoluzione schermi smartphone (Retina Display)
         function resize() {
             width = window.innerWidth;
             height = window.innerHeight;
@@ -135,52 +135,61 @@
             render();
         }
 
-        // Colori in base allo stato
+        // Definizione colori degli Stati
         function getFillColor(countryName) {
             const status = mapData[countryName];
-            if (status === 'BEEN') return '#2ecc71'; // Verde
-            if (status === 'WANT') return '#3498db'; // Azzurro
-            return '#ffffff'; // Bianco di base
+            if (status === 'BEEN') return '#2ecc71'; // Verde brillante per i viaggi fatti
+            if (status === 'WANT') return '#00d2ff'; // Un azzurro elettrico per i desideri (stacca sull'oceano)
+            return '#ffffff'; // Bianco di base per gli stati non selezionati
         }
 
-        // Rendering grafico sul Canvas (Disegna la sfera)
+        // Disegno del globo sul canvas
         function render() {
             context.clearRect(0, 0, width, height);
 
             if (!worldData) return;
 
-            // 1. Disegna l'oceano (la sfera di base)
+            // 1. DISEGNO DELL'OCEANO
+            // Creiamo un gradiente radiale per dare un effetto di profondità e sfericità al mare
+            const radius = projection.scale();
+            const center = projection.translate();
+            const gradient = context.createRadialGradient(
+                center[0] - radius/3, center[1] - radius/3, radius/10,
+                center[0], center[1], radius
+            );
+            gradient.addColorStop(0, '#3a7bd5'); // Colore mare illuminato
+            gradient.addColorStop(1, '#3a6073'); // Colore mare in ombra verso i bordi
+
             context.beginPath();
             path({type: "Sphere"});
-            context.fillStyle = "#e8ecef"; // Colore del mare molto tenue
+            context.fillStyle = gradient; // Applica il colore dell'oceano
             context.fill();
 
-            // 2. Disegna ogni singola nazione colorata
+            // 2. DISEGNO DELLE NAZIONI
             countries.features.forEach(feature => {
                 context.beginPath();
                 path(feature);
                 context.fillStyle = getFillColor(feature.properties.name);
                 context.fill();
-                context.strokeStyle = "#bdc3c7"; // Contorno nazioni
-                context.lineWidth = 0.5;
+                context.strokeStyle = "#2c3e50"; // Contorno nazioni scuro per staccare bene sul bianco e sull'oceano
+                context.lineWidth = 0.4;
                 context.stroke();
             });
 
-            // 3. Evidenzia la nazione attualmente selezionata al click
+            // 3. EVIDENZIAZIONE STATO SELEZIONATO
             if (selectedCountryFeature) {
                 context.beginPath();
                 path(selectedCountryFeature);
-                context.strokeStyle = "#e74c3c"; // Contorno rosso per evidenziare
+                context.strokeStyle = "#e74c3c"; // Contorno rosso fuoco quando cliccato
                 context.lineWidth = 1.5;
                 context.stroke();
             }
         }
 
-        // Gestione del Trascinamento (Rotazione) e dello Zoom
+        // Funzioni di Interazione (Rotazione e Zoom)
         const drag = d3.drag()
             .on("drag", (event) => {
                 const rotate = projection.rotate();
-                // Sensibilità di rotazione calcolata sulla scala di zoom attuale
                 const k = 90 / projection.scale(); 
                 projection.rotate([
                     rotate[0] + event.dx * k,
@@ -190,48 +199,43 @@
             });
 
         const zoom = d3.zoom()
-            .scaleExtent([0.5, 8]) // Limiti di zoom in e zoom out
+            .scaleExtent([0.5, 8])
             .on("zoom", (event) => {
                 const baseScale = Math.min(width, height) * 0.4;
                 projection.scale(baseScale * event.transform.k);
                 render();
             });
 
-        // Applica i controlli al canvas
         d3.select(canvas)
             .call(drag)
             .call(zoom)
             .on("click", handleClick);
 
-        // Rileva quale stato è stato cliccato/tappato sulla sfera 3D
+        // Identificazione dello stato al tap
         function handleClick(event) {
-            // Chiude il modal se era aperto
             modal.style.display = "none";
-            
             const [mouseX, mouseY] = d3.pointer(event);
             const geoPoint = projection.invert([mouseX, mouseY]);
 
-            // Se il click avviene fuori dalla sfera visibile, esce
             if (!geoPoint || isNaN(geoPoint[0])) {
                 selectedCountryFeature = null;
                 render();
                 return;
             }
 
-            // Cerca la nazione corrispondente alle coordinate cliccate
             const clicked = countries.features.find(f => d3.geoContains(f, geoPoint));
 
             if (clicked) {
                 selectedCountryFeature = clicked;
                 modalTitle.innerText = clicked.properties.name;
-                modal.style.display = "block"; // Mostra il menu
+                modal.style.display = "block";
             } else {
                 selectedCountryFeature = null;
             }
             render();
         }
 
-        // Cambia lo stato (BEEN/WANT/RESET) dalla finestra popup modale
+        // Funzione azionata dai pulsanti del menu
         window.updateStatus = function(status) {
             if (!selectedCountryFeature) return;
             const name = selectedCountryFeature.properties.name;
@@ -248,7 +252,7 @@
             render();
         };
 
-        // Chiude il popup se si clicca fuori dal menu su PC/Telefono
+        // Chiude il menu se si clicca sullo sfondo dello spazio
         window.addEventListener('pointerdown', (e) => {
             if (!modal.contains(e.target) && e.target !== canvas) {
                 modal.style.display = "none";
@@ -257,13 +261,10 @@
             }
         });
 
-        // Scarica la mappa del mondo in formato vettoriale leggero (TopoJSON 1:110m)
+        // Scarica i dati geografici e avvia il mondo
         d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json").then(topology => {
             worldData = topology;
-            // Converte il formato TopoJSON inGeoJSON utilizzabile per il disegno dei vettori
             countries = topojson.feature(worldData, worldData.objects.countries);
-            
-            // Avvia la mappa
             window.addEventListener("resize", resize);
             resize();
         });
