@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mappa del Mondo Interattiva</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        /* Setup della pagina a tutto schermo, ideale per smartphone */
+        html, body, #map {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #f0f2f5; /* Colore di sfondo per il mare */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* Interfaccia dei popup ottimizzata per il touch (schermi piccoli) */
+        .leaflet-popup-content-wrapper {
+            border-radius: 16px;
+            padding: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .popup-container {
+            text-align: center;
+            padding: 4px;
+        }
+        .popup-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            color: #2c3e50;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .popup-btn {
+            border: none;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 700;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            min-width: 75px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .btn-been { background-color: #2ecc71; color: white; }
+        .btn-want { background-color: #3498db; color: white; }
+        .btn-reset { background-color: #95a5a6; color: white; }
+        
+        /* Feedback tattile per smartphone */
+        .popup-btn:active { 
+            transform: scale(0.95);
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Configurazione della mappa con scorrimento continuo a destra e sinistra (worldCopyJump)
+        const map = L.map('map', {
+            center: [20, 0],
+            zoom: 2,
+            minZoom: 2,
+            maxZoom: 7,
+            bounceAtZoomLimits: true,
+            worldCopyJump: true 
+        });
+
+        // Carica i dati salvati nello smartphone, se presenti
+        let mapData = JSON.parse(localStorage.getItem('myWorldMapData')) || {};
+
+        // Assegna il colore in base allo stato (BEEN = Verde, WANT = Azzurro, Vuoto = Bianco)
+        function getCountryColor(countryName) {
+            const status = mapData[countryName];
+            if (status === 'BEEN') return '#2ecc71';
+            if (status === 'WANT') return '#3498db';
+            return '#ffffff';
+        }
+
+        // Stile grafico dei soli contorni delle nazioni
+        function styleFeature(feature) {
+            const cName = feature.properties.NAME || feature.properties.name;
+            return {
+                fillColor: getCountryColor(cName),
+                weight: 1.5,
+                opacity: 1,
+                color: '#7f8c8d', // Colore dei confini (grigio)
+                fillOpacity: 1
+            };
+        }
+
+        let geojsonLayer;
+
+        // Cambia lo stato della nazione, salva in memoria e aggiorna la mappa
+        function setCountryStatus(countryName, status, layer) {
+            if (status === 'RESET') {
+                delete mapData[countryName];
+            } else {
+                mapData[countryName] = status;
+            }
+            
+            localStorage.setItem('myWorldMapData', JSON.stringify(mapData));
+            geojsonLayer.resetStyle(layer);
+            map.closePopup();
+        }
+
+        // Recupera i confini del mondo (GeoJSON leggero ottimizzato per il caricamento mobile)
+        fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
+            .then(response => response.json())
+            .then(data => {
+                geojsonLayer = L.geoJson(data, {
+                    style: styleFeature,
+                    onEachFeature: function (feature, layer) {
+                        const countryName = feature.properties.NAME || feature.properties.name;
+
+                        layer.on('click', function (e) {
+                            // Genera dinamicamente i pulsanti touch-friendly all'interno del popup
+                            const popupContent = `
+                                <div class="popup-container">
+                                    <div class="popup-title">${countryName}</div>
+                                    <div class="btn-group">
+                                        <button class="popup-btn btn-been" onclick="setCountryStatus('${countryName.replace(/'/g, "\\'")}', 'BEEN', currentLayer)">BEEN</button>
+                                        <button class="popup-btn btn-want" onclick="setCountryStatus('${countryName.replace(/'/g, "\\'")}', 'WANT', currentLayer)">WANT</button>
+                                        <button class="popup-btn btn-reset" onclick="setCountryStatus('${countryName.replace(/'/g, "\\'")}', 'RESET', currentLayer)">Reset</button>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Mantiene il riferimento al poligono cliccato per poterlo aggiornare
+                            window.currentLayer = layer; 
+
+                            L.popup()
+                                .setLatLng(e.latlng)
+                                .setContent(popupContent)
+                                .openOn(map);
+                        });
+                    }
+                }).addTo(map);
+            })
+            .catch(err => console.error("Errore nel caricamento della mappa:", err));
+    </script>
+</body>
+</html>
