@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Globo 3D Interattivo con Contatori</title>
+    <title>Globo 3D HD Interattivo</title>
     <style>
         /* Reset totale per smartphone e PC */
         html, body {
@@ -111,9 +111,10 @@
             cursor: pointer;
             flex: 1;
             box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            transition: background-color 0.2s;
         }
         .btn-been { background-color: #2ecc71; color: white; }
-        .btn-want { background-color: #3498db; color: white; }
+        .btn-want { background-color: #00d2ff; color: #1a1a2e; } /* Allineato all'azzurro ciano del globo */
         .btn-reset { background-color: #95a5a6; color: white; }
         .popup-btn:active { transform: scale(0.95); }
     </style>
@@ -188,7 +189,6 @@
             return '#ffffff';
         }
 
-        // Funzione per ricalcolare i contatori e aggiornare la grafica HTML
         function updateCounters() {
             let beenCount = 0;
             let wantCount = 0;
@@ -222,11 +222,13 @@
             context.fillStyle = gradient;
             context.fill();
 
-            // 2. Nazioni
+            // 2. Nazioni (Disegnate ad alta definizione)
             countries.features.forEach(feature => {
                 context.beginPath();
                 path(feature);
-                context.fillStyle = getFillColor(feature.properties.name);
+                // Alcuni dataset usano il campo 'NAME' anziché 'name'
+                const name = feature.properties.NAME || feature.properties.name;
+                context.fillStyle = getFillColor(name);
                 context.fill();
                 context.strokeStyle = "#2c3e50";
                 context.lineWidth = 0.4;
@@ -256,7 +258,7 @@
             });
 
         const zoom = d3.zoom()
-            .scaleExtent([0.5, 8])
+            .scaleExtent([0.5, 12]) // Aumentato il limite di zoom massimo per apprezzare i dettagli HD
             .on("zoom", (event) => {
                 const baseScale = Math.min(width, height) * 0.4;
                 projection.scale(baseScale * event.transform.k);
@@ -279,11 +281,12 @@
                 return;
             }
 
+            // Controllo compatibilità su entrambi i potenziali nomi delle proprietà del file GeoJSON
             const clicked = countries.features.find(f => d3.geoContains(f, geoPoint));
 
             if (clicked) {
                 selectedCountryFeature = clicked;
-                modalTitle.innerText = clicked.properties.name;
+                modalTitle.innerText = clicked.properties.NAME || clicked.properties.name;
                 modal.style.display = "block";
             } else {
                 selectedCountryFeature = null;
@@ -293,7 +296,7 @@
 
         window.updateStatus = function(status) {
             if (!selectedCountryFeature) return;
-            const name = selectedCountryFeature.properties.name;
+            const name = selectedCountryFeature.properties.NAME || selectedCountryFeature.properties.name;
 
             if (status === 'RESET') {
                 delete mapData[name];
@@ -305,7 +308,7 @@
             modal.style.display = "none";
             selectedCountryFeature = null;
             
-            updateCounters(); // Aggiorna i numeri nel box
+            updateCounters(); 
             render();
         };
 
@@ -317,12 +320,12 @@
             }
         });
 
-        // Inizializzazione dati geografici
-        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json").then(topology => {
+        // CARICAMENTO DEL DATASET 50M (Alta Definizione dei dettagli costieri e geografici)
+        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json").then(topology => {
             worldData = topology;
             countries = topojson.feature(worldData, worldData.objects.countries);
             
-            updateCounters(); // Conta i dati esistenti al primo avvio
+            updateCounters(); 
             window.addEventListener("resize", resize);
             resize();
         });
